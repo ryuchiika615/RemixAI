@@ -16,39 +16,56 @@ def _safe_filename(name: str) -> str:
     return name
 
 
+def _ydl_configs(cookies_path: str = None, out: str = None) -> list:
+    base = {
+        "format": "bestaudio/best",
+        "postprocessors": [{"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}],
+        "outtmpl": out,
+        "quiet": True,
+        "no_warnings": True,
+        "extractor_retries": 1,
+    }
+    configs = []
+    if cookies_path and os.path.isfile(cookies_path):
+        cfg = dict(base)
+        cfg["cookiefile"] = cookies_path
+        configs.append(("cookies", cfg))
+    configs.extend([
+        ("android_embedded", {
+            **base,
+            "extractor_args": {"youtube": {"player_client": ["android_embedded"]}},
+            "http_headers": {"User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36"},
+        }),
+        ("web_music", {
+            **base,
+            "extractor_args": {"youtube": {"player_client": ["web_music"]}},
+            "http_headers": {"User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36"},
+        }),
+    ])
+    return configs
+
+
 def download_from_youtube(url: str, cookies_path: str = None) -> str:
     import yt_dlp
     tmpdir = tempfile.mkdtemp()
     out = os.path.join(tmpdir, "%(title)s.%(ext)s")
-    ydl_opts = {
-        "format": "bestaudio/best",
-        "postprocessors": [{
-            "key": "FFmpegExtractAudio",
-            "preferredcodec": "mp3",
-            "preferredquality": "192",
-        }],
-        "outtmpl": out,
-        "quiet": True,
-        "no_warnings": True,
-    }
-    if cookies_path and os.path.isfile(cookies_path):
-        ydl_opts["cookiefile"] = cookies_path
-    else:
-        ydl_opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
-        ydl_opts["http_headers"] = {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36",
-        }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
-    for f in os.listdir(tmpdir):
-        if f.endswith(".mp3"):
-            src = os.path.join(tmpdir, f)
-            safe_name = _safe_filename(f)
-            dst = os.path.join(tmpdir, safe_name)
-            if src != dst:
-                os.rename(src, dst)
-            return dst
-    raise Exception("ダウンロード失敗: 音声ファイルが見つかりませんでした")
+    last_err = None
+    for label, ydl_opts in _ydl_configs(cookies_path, out):
+        try:
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.download([url])
+            for f in os.listdir(tmpdir):
+                if f.endswith(".mp3"):
+                    src = os.path.join(tmpdir, f)
+                    safe_name = _safe_filename(f)
+                    dst = os.path.join(tmpdir, safe_name)
+                    if src != dst:
+                        os.rename(src, dst)
+                    return dst
+        except Exception as e:
+            last_err = e
+            continue
+    raise Exception(f"YouTubeダウンロード失敗: {last_err}")
 
 
 def process(audio_file, youtube_url, cookies_file, theme, orientation, start_offset, duration, progress=gr.Progress()):
