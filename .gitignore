@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.pyo
+.gradio/
+input/*.mp3
+output/
+.DS_Store
+*.log
+public_url.txt
