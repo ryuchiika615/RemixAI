@@ -16,7 +16,7 @@ def _safe_filename(name: str) -> str:
     return name
 
 
-def download_from_youtube(url: str) -> str:
+def download_from_youtube(url: str, cookies_path: str = None) -> str:
     import yt_dlp
     tmpdir = tempfile.mkdtemp()
     out = os.path.join(tmpdir, "%(title)s.%(ext)s")
@@ -27,24 +27,19 @@ def download_from_youtube(url: str) -> str:
             "preferredcodec": "mp3",
             "preferredquality": "192",
         }],
-        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36",
-        },
         "outtmpl": out,
         "quiet": True,
         "no_warnings": True,
     }
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
-    except Exception:
-        ydl_opts["extractor_args"] = {}
+    if cookies_path and os.path.isfile(cookies_path):
+        ydl_opts["cookiefile"] = cookies_path
+    else:
+        ydl_opts["extractor_args"] = {"youtube": {"player_client": ["android", "web"]}}
         ydl_opts["http_headers"] = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+            "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36",
         }
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([url])
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
     for f in os.listdir(tmpdir):
         if f.endswith(".mp3"):
             src = os.path.join(tmpdir, f)
@@ -56,13 +51,14 @@ def download_from_youtube(url: str) -> str:
     raise Exception("ダウンロード失敗: 音声ファイルが見つかりませんでした")
 
 
-def process(audio_file, youtube_url, theme, orientation, start_offset, duration, progress=gr.Progress()):
+def process(audio_file, youtube_url, cookies_file, theme, orientation, start_offset, duration, progress=gr.Progress()):
     tmpdir = tempfile.mkdtemp()
 
     try:
         if youtube_url:
             progress(0, desc="YouTubeからダウンロード中…")
-            audio_path = download_from_youtube(youtube_url)
+            cookies_path = cookies_file if cookies_file else None
+            audio_path = download_from_youtube(youtube_url, cookies_path)
         elif audio_file is not None:
             audio_path = audio_file
         else:
@@ -126,6 +122,15 @@ def create_ui():
                 youtube_url = gr.Textbox(
                     label="YouTube URL",
                     placeholder="https://youtube.com/watch?v=... を貼り付け",
+                )
+                cookies_input = gr.File(
+                    label="クッキーファイル（任意）",
+                    file_types=[".txt"],
+                    file_count="single",
+                )
+                gr.Markdown(
+                    "📌 **ブロックされた場合**: Chrome拡張「[Get cookies.txt](https://chrome.google.com/webstore/detail/get-cookiestxt/bgaddhkoddajcdgocldbbfleckgcbcid)」"
+                    "などでcookies.txtをエクスポートしてアップロードすると回避できます"
                 )
 
         # テーマ選択
@@ -202,7 +207,7 @@ def create_ui():
         generate_btn.click(
             fn=process,
             inputs=[
-                audio_input, youtube_url,
+                audio_input, youtube_url, cookies_input,
                 theme_dropdown, orientation_radio,
                 start_slider, duration_slider,
             ],
