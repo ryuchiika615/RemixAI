@@ -27,12 +27,24 @@ def download_from_youtube(url: str) -> str:
             "preferredcodec": "mp3",
             "preferredquality": "192",
         }],
+        "extractor_args": {"youtube": {"player_client": ["android", "web"]}},
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36",
+        },
         "outtmpl": out,
         "quiet": True,
         "no_warnings": True,
     }
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        ydl.download([url])
+    try:
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+    except Exception:
+        ydl_opts["extractor_args"] = {}
+        ydl_opts["http_headers"] = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        }
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
     for f in os.listdir(tmpdir):
         if f.endswith(".mp3"):
             src = os.path.join(tmpdir, f)
