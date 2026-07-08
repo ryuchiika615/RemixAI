@@ -3,3 +3,4 @@ pydub>=0.25.0
 Pillow>=10.0.0
 numpy>=1.22.0
 gradio>=5.0.0
+yt-dlp>=2024.0.0
